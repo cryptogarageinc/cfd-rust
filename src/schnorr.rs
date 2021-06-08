@@ -13,16 +13,14 @@ use std::result::Result::{Err, Ok};
 use std::str::FromStr;
 
 use self::cfd_sys::{
-  CfdAdaptEcdsaAdaptor, CfdCheckTweakAddFromSchnorrPubkey, CfdComputeSchnorrSigPoint,
-  CfdExtractEcdsaAdaptorSecret, CfdGetSchnorrPubkeyFromPrivkey, CfdGetSchnorrPubkeyFromPubkey,
-  CfdSchnorrKeyPairTweakAdd, CfdSchnorrPubkeyTweakAdd, CfdSignEcdsaAdaptor, CfdSignSchnorr,
+  CfdCheckTweakAddFromSchnorrPubkey, CfdComputeSchnorrSigPoint, CfdDecryptEcdsaAdaptor,
+  CfdEncryptEcdsaAdaptor, CfdGetSchnorrPubkeyFromPrivkey, CfdGetSchnorrPubkeyFromPubkey,
+  CfdRecoverEcdsaAdaptor, CfdSchnorrKeyPairTweakAdd, CfdSchnorrPubkeyTweakAdd, CfdSignSchnorr,
   CfdSignSchnorrWithNonce, CfdSplitSchnorrSignature, CfdVerifyEcdsaAdaptor, CfdVerifySchnorr,
 };
 
 /// adaptor signature size.
-pub const ADAPTOR_SIGNATURE_SIZE: usize = 65;
-/// adaptor proof size.
-pub const ADAPTOR_PROOF_SIZE: usize = 97;
+pub const ADAPTOR_SIGNATURE_SIZE: usize = 162;
 /// schnorr nonce size.
 pub const SCHNORR_NONCE_SIZE: usize = 32;
 /// schnorr signature size.
@@ -35,6 +33,42 @@ pub struct AdaptorSignature {
 }
 
 impl AdaptorSignature {
+  /// Encrypt by ecdsa-adaptor.
+  ///
+  /// # Arguments
+  /// * `msg` - A 32-byte message bytes
+  /// * `secret_key` - A secret key
+  /// * `encryption_key` - An encryption key
+  pub fn encrypt(
+    msg: &ByteData,
+    secret_key: &Privkey,
+    encryption_key: &Pubkey,
+  ) -> Result<AdaptorSignature, CfdError> {
+    let msg_hex = alloc_c_string(&msg.to_hex())?;
+    let sk_hex = alloc_c_string(&secret_key.to_hex())?;
+    let adaptor_hex = alloc_c_string(&encryption_key.to_hex())?;
+    let mut handle = ErrorHandle::new()?;
+    let mut signature: *mut c_char = ptr::null_mut();
+    let error_code = unsafe {
+      CfdEncryptEcdsaAdaptor(
+        handle.as_handle(),
+        msg_hex.as_ptr(),
+        sk_hex.as_ptr(),
+        adaptor_hex.as_ptr(),
+        &mut signature,
+      )
+    };
+    let result = match error_code {
+      0 => {
+        let sig_str = unsafe { collect_cstring_and_free(signature) }?;
+        Ok(AdaptorSignature::from_str(&sig_str)?)
+      }
+      _ => Err(handle.get_error(error_code)),
+    };
+    handle.free_handle();
+    result
+  }
+
   /// Generate from slice.
   ///
   /// # Arguments
@@ -44,7 +78,7 @@ impl AdaptorSignature {
   ///
   /// ```
   /// use cfd_rust::AdaptorSignature;
-  /// let bytes = [2; 65];
+  /// let bytes = [2; 162];
   /// let sig = AdaptorSignature::from_slice(&bytes).expect("Fail");
   /// ```
   pub fn from_slice(data: &[u8]) -> Result<AdaptorSignature, CfdError> {
@@ -60,7 +94,7 @@ impl AdaptorSignature {
   ///
   /// ```
   /// use cfd_rust::AdaptorSignature;
-  /// let bytes = [2; 65];
+  /// let bytes = [2; 162];
   /// let sig = AdaptorSignature::from_vec(bytes.to_vec()).expect("Fail");
   /// ```
   pub fn from_vec(data: Vec<u8>) -> Result<AdaptorSignature, CfdError> {
@@ -86,6 +120,104 @@ impl AdaptorSignature {
   pub fn to_str(&self) -> String {
     self.to_hex()
   }
+
+  /// "Decrypt" an adaptor signature using the provided secret.
+  ///
+  /// # Arguments
+  /// * `adaptor_secret` - An adaptor secret key
+  pub fn decrypt(&self, adaptor_secret: &Privkey) -> Result<ByteData, CfdError> {
+    let sig_hex = alloc_c_string(&hex_from_bytes(&self.data))?;
+    let sk_hex = alloc_c_string(&adaptor_secret.to_hex())?;
+    let mut handle = ErrorHandle::new()?;
+    let mut signature: *mut c_char = ptr::null_mut();
+    let error_code = unsafe {
+      CfdDecryptEcdsaAdaptor(
+        handle.as_handle(),
+        sig_hex.as_ptr(),
+        sk_hex.as_ptr(),
+        &mut signature,
+      )
+    };
+    let result = match error_code {
+      0 => {
+        let sig = unsafe { collect_cstring_and_free(signature) }?;
+        ByteData::from_str(&sig)
+      }
+      _ => Err(handle.get_error(error_code)),
+    };
+    handle.free_handle();
+    result
+  }
+
+  /// Extract an adaptor secret from an ECDSA signature for a given adaptor signature.
+  ///
+  /// # Arguments
+  /// * `signature` - A ecdsa signature
+  /// * `encryption_key` - An encryption key
+  pub fn recover(
+    &self,
+    signature: &ByteData,
+    encryption_key: &Pubkey,
+  ) -> Result<Privkey, CfdError> {
+    let adaptor_sig_hex = alloc_c_string(&hex_from_bytes(&self.data))?;
+    let sig_hex = alloc_c_string(&signature.to_hex())?;
+    let adaptor_hex = alloc_c_string(&encryption_key.to_hex())?;
+    let mut handle = ErrorHandle::new()?;
+    let mut secret: *mut c_char = ptr::null_mut();
+    let error_code = unsafe {
+      CfdRecoverEcdsaAdaptor(
+        handle.as_handle(),
+        adaptor_sig_hex.as_ptr(),
+        sig_hex.as_ptr(),
+        adaptor_hex.as_ptr(),
+        &mut secret,
+      )
+    };
+    let result = match error_code {
+      0 => {
+        let secret_key = unsafe { collect_cstring_and_free(secret) }?;
+        Privkey::from_str(&secret_key)
+      }
+      _ => Err(handle.get_error(error_code)),
+    };
+    handle.free_handle();
+    result
+  }
+
+  /// Verify adaptor signature.
+  ///
+  /// # Arguments
+  /// * `msg` - A 32-byte message bytes
+  /// * `pubkey` - A signed pubkey
+  /// * `encryption_key` - An encryption key
+  pub fn verify(
+    &self,
+    msg: &ByteData,
+    pubkey: &Pubkey,
+    encryption_key: &Pubkey,
+  ) -> Result<bool, CfdError> {
+    let sig_hex = alloc_c_string(&hex_from_bytes(&self.data))?;
+    let adaptor_hex = alloc_c_string(&encryption_key.to_hex())?;
+    let msg_hex = alloc_c_string(&msg.to_hex())?;
+    let pubkey_hex = alloc_c_string(&pubkey.to_hex())?;
+    let mut handle = ErrorHandle::new()?;
+    let error_code = unsafe {
+      CfdVerifyEcdsaAdaptor(
+        handle.as_handle(),
+        sig_hex.as_ptr(),
+        msg_hex.as_ptr(),
+        pubkey_hex.as_ptr(),
+        adaptor_hex.as_ptr(),
+      )
+    };
+    let result = match error_code {
+      0 => Ok(true),
+      7 => Ok(false), // SignVerification
+      _ => Err(handle.get_error(error_code)),
+    };
+    handle.free_handle();
+    result
+  }
 }
 
 impl fmt::Display for AdaptorSignature {
@@ -108,314 +240,6 @@ impl FromStr for AdaptorSignature {
 impl Default for AdaptorSignature {
   fn default() -> AdaptorSignature {
     AdaptorSignature { data: vec![] }
-  }
-}
-
-/// A container that stores An adaptor proof.
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct AdaptorProof {
-  data: Vec<u8>,
-}
-
-impl AdaptorProof {
-  /// Generate from slice.
-  ///
-  /// # Arguments
-  /// * `data` - A proof bytes
-  ///
-  /// # Example
-  ///
-  /// ```
-  /// use cfd_rust::AdaptorProof;
-  /// let bytes = [2; 97];
-  /// let proof = AdaptorProof::from_slice(&bytes).expect("Fail");
-  /// ```
-  pub fn from_slice(data: &[u8]) -> Result<AdaptorProof, CfdError> {
-    AdaptorProof::from_vec(data.to_vec())
-  }
-
-  /// Generate from vector.
-  ///
-  /// # Arguments
-  /// * `data` - A proof vector
-  ///
-  /// # Example
-  ///
-  /// ```
-  /// use cfd_rust::AdaptorProof;
-  /// let bytes = [2; 97];
-  /// let proof = AdaptorProof::from_vec(bytes.to_vec()).expect("Fail");
-  /// ```
-  pub fn from_vec(data: Vec<u8>) -> Result<AdaptorProof, CfdError> {
-    match data.len() {
-      ADAPTOR_PROOF_SIZE => Ok(AdaptorProof { data }),
-      _ => Err(CfdError::IllegalArgument(
-        "invalid pubkey format.".to_string(),
-      )),
-    }
-  }
-
-  #[inline]
-  pub fn to_slice(&self) -> &[u8] {
-    &self.data
-  }
-
-  #[inline]
-  pub fn to_hex(&self) -> String {
-    hex_from_bytes(&self.data)
-  }
-
-  #[inline]
-  pub fn to_str(&self) -> String {
-    self.to_hex()
-  }
-}
-
-impl fmt::Display for AdaptorProof {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    let s = hex::encode(&self.data);
-    write!(f, "{}", s)
-  }
-}
-
-impl FromStr for AdaptorProof {
-  type Err = CfdError;
-  fn from_str(text: &str) -> Result<AdaptorProof, CfdError> {
-    match byte_from_hex(text) {
-      Ok(byte_array) => AdaptorProof::from_vec(byte_array),
-      Err(e) => Err(e),
-    }
-  }
-}
-
-impl Default for AdaptorProof {
-  fn default() -> AdaptorProof {
-    AdaptorProof { data: vec![] }
-  }
-}
-
-pub struct AdaptorPair {
-  pub signature: AdaptorSignature,
-  pub proof: AdaptorProof,
-}
-
-/// A container that stores ecdsa adaptor API.
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct EcdsaAdaptorUtil {}
-
-impl EcdsaAdaptorUtil {
-  pub fn new() -> EcdsaAdaptorUtil {
-    EcdsaAdaptorUtil::default()
-  }
-
-  /// Sign by ecdsa-adaptor.
-  ///
-  /// # Arguments
-  /// * `msg` - A 32-byte message bytes
-  /// * `secret_key` - A secret key
-  /// * `adaptor` - An adaptor pubkey
-  ///
-  /// # Example
-  ///
-  /// ```
-  /// use cfd_rust::{EcdsaAdaptorUtil, ByteData, Pubkey, Privkey};
-  /// use std::str::FromStr;
-  /// let msg = ByteData::from_str("024bdd11f2144e825db05759bdd9041367a420fad14b665fd08af5b42056e5e2").expect("Fail");
-  /// let adaptor = Pubkey::from_str("038d48057fc4ce150482114d43201b333bf3706f3cd527e8767ceb4b443ab5d349").expect("Fail");
-  /// let sk = Privkey::from_str("90ac0d5dc0a1a9ab352afb02005a5cc6c4df0da61d8149d729ff50db9b5a5215").expect("Fail");
-  /// let obj = EcdsaAdaptorUtil::new();
-  /// let pair = obj.sign(&msg, &sk, &adaptor).expect("Fail");
-  /// ```
-  pub fn sign(
-    &self,
-    msg: &ByteData,
-    secret_key: &Privkey,
-    adaptor: &Pubkey,
-  ) -> Result<AdaptorPair, CfdError> {
-    let msg_hex = alloc_c_string(&msg.to_hex())?;
-    let sk_hex = alloc_c_string(&secret_key.to_hex())?;
-    let adaptor_hex = alloc_c_string(&adaptor.to_hex())?;
-    let mut handle = ErrorHandle::new()?;
-    let mut signature: *mut c_char = ptr::null_mut();
-    let mut proof: *mut c_char = ptr::null_mut();
-    let error_code = unsafe {
-      CfdSignEcdsaAdaptor(
-        handle.as_handle(),
-        msg_hex.as_ptr(),
-        sk_hex.as_ptr(),
-        adaptor_hex.as_ptr(),
-        &mut signature,
-        &mut proof,
-      )
-    };
-    let result = match error_code {
-      0 => {
-        let str_list = unsafe { collect_multi_cstring_and_free(&[signature, proof]) }?;
-        let sig = AdaptorSignature::from_str(&str_list[0])?;
-        let proof_obj = AdaptorProof::from_str(&str_list[1])?;
-        Ok(AdaptorPair {
-          signature: sig,
-          proof: proof_obj,
-        })
-      }
-      _ => Err(handle.get_error(error_code)),
-    };
-    handle.free_handle();
-    result
-  }
-
-  /// "Decrypt" an adaptor signature using the provided secret.
-  ///
-  /// # Arguments
-  /// * `adaptor_signature` - An adaptor signature
-  /// * `adaptor_secret` - An adaptor secret key
-  ///
-  /// # Example
-  ///
-  /// ```
-  /// use cfd_rust::{EcdsaAdaptorUtil, AdaptorSignature, AdaptorProof, Privkey};
-  /// use std::str::FromStr;
-  /// let adaptor_sig = AdaptorSignature::from_str("00cbe0859638c3600ea1872ed7a55b8182a251969f59d7d2da6bd4afedf25f5021a49956234cbbbbede8ca72e0113319c84921bf1224897a6abd89dc96b9c5b208").expect("Fail");
-  /// let secret = Privkey::from_str("475697a71a74ff3f2a8f150534e9b67d4b0b6561fab86fcaa51f8c9d6c9db8c6").expect("Fail");
-  /// let obj = EcdsaAdaptorUtil::new();
-  /// let sig = obj.adapt(&adaptor_sig, &secret).expect("Fail");
-  /// ```
-  pub fn adapt(
-    &self,
-    adaptor_signature: &AdaptorSignature,
-    adaptor_secret: &Privkey,
-  ) -> Result<ByteData, CfdError> {
-    let sig_hex = alloc_c_string(&adaptor_signature.to_hex())?;
-    let sk_hex = alloc_c_string(&adaptor_secret.to_hex())?;
-    let mut handle = ErrorHandle::new()?;
-    let mut signature: *mut c_char = ptr::null_mut();
-    let error_code = unsafe {
-      CfdAdaptEcdsaAdaptor(
-        handle.as_handle(),
-        sig_hex.as_ptr(),
-        sk_hex.as_ptr(),
-        &mut signature,
-      )
-    };
-    let result = match error_code {
-      0 => {
-        let sig = unsafe { collect_cstring_and_free(signature) }?;
-        ByteData::from_str(&sig)
-      }
-      _ => Err(handle.get_error(error_code)),
-    };
-    handle.free_handle();
-    result
-  }
-
-  /// Extract an adaptor secret from an ECDSA signature for a given adaptor signature.
-  ///
-  /// # Arguments
-  /// * `adaptor_signature` - An adaptor signature
-  /// * `signature` - A ecdsa signature
-  /// * `adaptor` - An adaptor pubkey
-  ///
-  /// # Example
-  ///
-  /// ```
-  /// use cfd_rust::{EcdsaAdaptorUtil, AdaptorSignature, ByteData, Pubkey};
-  /// use std::str::FromStr;
-  /// let adaptor_sig = AdaptorSignature::from_str("00cbe0859638c3600ea1872ed7a55b8182a251969f59d7d2da6bd4afedf25f5021a49956234cbbbbede8ca72e0113319c84921bf1224897a6abd89dc96b9c5b208").expect("Fail");
-  /// let sig = ByteData::from_str("099c91aa1fe7f25c41085c1d3c9e73fe04a9d24dac3f9c2172d6198628e57f474d13456e98d8989043fd4674302ce90c432e2f8bb0269f02c72aafec60b72de1").expect("Fail");
-  /// let adaptor = Pubkey::from_str("038d48057fc4ce150482114d43201b333bf3706f3cd527e8767ceb4b443ab5d349").expect("Fail");
-  /// let obj = EcdsaAdaptorUtil::new();
-  /// let secret = obj.extract_secret(&adaptor_sig, &sig, &adaptor).expect("Fail");
-  /// ```
-  pub fn extract_secret(
-    &self,
-    adaptor_signature: &AdaptorSignature,
-    signature: &ByteData,
-    adaptor: &Pubkey,
-  ) -> Result<Privkey, CfdError> {
-    let adaptor_sig_hex = alloc_c_string(&adaptor_signature.to_hex())?;
-    let sig_hex = alloc_c_string(&signature.to_hex())?;
-    let adaptor_hex = alloc_c_string(&adaptor.to_hex())?;
-    let mut handle = ErrorHandle::new()?;
-    let mut secret: *mut c_char = ptr::null_mut();
-    let error_code = unsafe {
-      CfdExtractEcdsaAdaptorSecret(
-        handle.as_handle(),
-        adaptor_sig_hex.as_ptr(),
-        sig_hex.as_ptr(),
-        adaptor_hex.as_ptr(),
-        &mut secret,
-      )
-    };
-    let result = match error_code {
-      0 => {
-        let secret_key = unsafe { collect_cstring_and_free(secret) }?;
-        Privkey::from_str(&secret_key)
-      }
-      _ => Err(handle.get_error(error_code)),
-    };
-    handle.free_handle();
-    result
-  }
-
-  /// Verify adaptor signature.
-  ///
-  /// # Arguments
-  /// * `adaptor_signature` - An adaptor signature
-  /// * `proof` - An adaptor proof
-  /// * `adaptor` - An adaptor pubkey
-  /// * `msg` - A 32-byte message bytes
-  /// * `pubkey` - A signed pubkey
-  ///
-  /// # Example
-  ///
-  /// ```
-  /// use cfd_rust::{EcdsaAdaptorUtil, AdaptorSignature, AdaptorProof, ByteData, Pubkey};
-  /// use std::str::FromStr;
-  /// let adaptor_sig = AdaptorSignature::from_str("00cbe0859638c3600ea1872ed7a55b8182a251969f59d7d2da6bd4afedf25f5021a49956234cbbbbede8ca72e0113319c84921bf1224897a6abd89dc96b9c5b208").expect("Fail");
-  /// let adaptor_proof = AdaptorProof::from_str("00b02472be1ba09f5675488e841a10878b38c798ca63eff3650c8e311e3e2ebe2e3b6fee5654580a91cc5149a71bf25bcbeae63dea3ac5ad157a0ab7373c3011d0fc2592a07f719c5fc1323f935569ecd010db62f045e965cc1d564eb42cce8d6d").expect("Fail");
-  /// let adaptor = Pubkey::from_str("038d48057fc4ce150482114d43201b333bf3706f3cd527e8767ceb4b443ab5d349").expect("Fail");
-  /// let msg = ByteData::from_str("024bdd11f2144e825db05759bdd9041367a420fad14b665fd08af5b42056e5e2").expect("Fail");
-  /// let pubkey = Pubkey::from_str("03490cec9a53cd8f2f664aea61922f26ee920c42d2489778bb7c9d9ece44d149a7").expect("Fail");
-  /// let obj = EcdsaAdaptorUtil::new();
-  /// let is_verify = obj.verify(&adaptor_sig, &adaptor_proof, &adaptor, &msg, &pubkey).expect("Fail");
-  /// ```
-  pub fn verify(
-    &self,
-    adaptor_signature: &AdaptorSignature,
-    proof: &AdaptorProof,
-    adaptor: &Pubkey,
-    msg: &ByteData,
-    pubkey: &Pubkey,
-  ) -> Result<bool, CfdError> {
-    let sig_hex = alloc_c_string(&adaptor_signature.to_hex())?;
-    let proof_hex = alloc_c_string(&proof.to_hex())?;
-    let adaptor_hex = alloc_c_string(&adaptor.to_hex())?;
-    let msg_hex = alloc_c_string(&msg.to_hex())?;
-    let pubkey_hex = alloc_c_string(&pubkey.to_hex())?;
-    let mut handle = ErrorHandle::new()?;
-    let error_code = unsafe {
-      CfdVerifyEcdsaAdaptor(
-        handle.as_handle(),
-        sig_hex.as_ptr(),
-        proof_hex.as_ptr(),
-        adaptor_hex.as_ptr(),
-        msg_hex.as_ptr(),
-        pubkey_hex.as_ptr(),
-      )
-    };
-    let result = match error_code {
-      0 => Ok(true),
-      7 => Ok(false), // SignVerification
-      _ => Err(handle.get_error(error_code)),
-    };
-    handle.free_handle();
-    result
-  }
-}
-
-impl Default for EcdsaAdaptorUtil {
-  fn default() -> EcdsaAdaptorUtil {
-    EcdsaAdaptorUtil {}
   }
 }
 

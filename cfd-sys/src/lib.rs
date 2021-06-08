@@ -463,34 +463,32 @@ fns! {
     pubkey: *const i8,
     signature: *const i8,
   ) -> c_int;
-  pub fn CfdSignEcdsaAdaptor(
+  pub fn CfdEncryptEcdsaAdaptor(
     handle: *const c_void,
     message: *const i8,
     secret_key: *const i8,
-    adaptor: *const i8,
+    encryption_key: *const i8,
     adaptor_signature: *mut *mut c_char,
-    adaptor_proof: *mut *mut c_char,
   ) -> c_int;
-  pub fn CfdAdaptEcdsaAdaptor(
+  pub fn CfdDecryptEcdsaAdaptor(
     handle: *const c_void,
     adaptor_signature: *const i8,
     adaptor_secret: *const i8,
     signature: *mut *mut c_char,
   ) -> c_int;
-  pub fn CfdExtractEcdsaAdaptorSecret(
+  pub fn CfdRecoverEcdsaAdaptor(
     handle: *const c_void,
     adaptor_signature: *const i8,
     signature: *const i8,
-    adaptor: *const i8,
+    encryption_key: *const i8,
     adaptor_secret: *mut *mut c_char,
   ) -> c_int;
   pub fn CfdVerifyEcdsaAdaptor(
     handle: *const c_void,
     adaptor_signature: *const i8,
-    proof: *const i8,
-    adaptor: *const i8,
     message: *const i8,
     pubkey: *const i8,
+    encryption_key: *const i8,
   ) -> c_int;
   pub fn CfdGetSchnorrPubkeyFromPrivkey(
     handle: *const c_void,
