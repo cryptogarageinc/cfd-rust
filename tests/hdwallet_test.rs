@@ -2,7 +2,7 @@ extern crate cfd_rust;
 
 #[cfg(test)]
 mod tests {
-  use cfd_rust::{ByteData, ExtPrivkey, ExtPubkey, HDWallet, MnemonicLanguage, Network, Pubkey};
+  use cfd_rust::{ByteData, ExtPrivkey, ExtPubkey, HdWallet, MnemonicLanguage, Network, Pubkey};
   use std::str::FromStr;
 
   #[test]
@@ -132,36 +132,36 @@ mod tests {
 
   #[test]
   fn hdwallet_test() {
-    let word_list_en = HDWallet::mnemonic_word_list_en().expect("Fail");
+    let word_list_en = HdWallet::mnemonic_word_list_en().expect("Fail");
     assert_eq!(2048, word_list_en.len());
     assert_eq!("ability", word_list_en[1]);
-    let word_list_ja = HDWallet::mnemonic_word_list(MnemonicLanguage::JP).expect("Fail");
+    let word_list_ja = HdWallet::mnemonic_word_list(MnemonicLanguage::Jp).expect("Fail");
     assert_eq!(2048, word_list_ja.len());
     assert_eq!("あいさつ", word_list_ja[1]);
 
     let mnemonic_from_entropy =
-      HDWallet::mnemonic_from_entropy(&[1; 32], MnemonicLanguage::EN).expect("Fail");
+      HdWallet::mnemonic_from_entropy(&[1; 32], MnemonicLanguage::En).expect("Fail");
     assert_eq!("absurd amount doctor acoustic avoid letter advice cage absurd amount doctor acoustic avoid letter advice cage absurd amount doctor acoustic avoid letter advice comic", mnemonic_from_entropy);
-    let entropy = HDWallet::entropy_from_mnemonic(
+    let entropy = HdWallet::entropy_from_mnemonic(
     "absurd amount doctor acoustic avoid letter advice cage absurd amount doctor acoustic avoid letter advice cage absurd amount doctor acoustic avoid letter advice comic",
-    MnemonicLanguage::EN,
+    MnemonicLanguage::En,
     ).expect("Fail");
     assert_eq!(
       "0101010101010101010101010101010101010101010101010101010101010101",
       ByteData::from_slice(&entropy).to_hex()
     );
 
-    let wallet = HDWallet::from_mnemonic(
+    let wallet = HdWallet::from_mnemonic(
       "absurd amount doctor acoustic avoid letter advice cage absurd amount doctor acoustic avoid letter advice cage absurd amount doctor acoustic avoid letter advice comic",
-      MnemonicLanguage::EN,
+      MnemonicLanguage::En,
     ).expect("Fail");
     assert_eq!(
       "5191159cd9532cfd352d7a9bc4d91ad82e502ac7be0ddec134ea13172a4f256115d9c04f763395529673fd5d9baa5c83f191bdaa0b66c2f6a1a155b9859eb83d",
       ByteData::from_slice(wallet.to_seed()).to_hex()
     );
-    let wallet_ph = HDWallet::from_mnemonic_passphrase(
+    let wallet_ph = HdWallet::from_mnemonic_passphrase(
       "absurd amount doctor acoustic avoid letter advice cage absurd amount doctor acoustic avoid letter advice cage absurd amount doctor acoustic avoid letter advice comic",
-      MnemonicLanguage::EN,
+      MnemonicLanguage::En,
       "pass",
     ).expect("Fail");
     assert_eq!(
@@ -169,9 +169,9 @@ mod tests {
       ByteData::from_slice(wallet_ph.to_seed()).to_hex()
     );
 
-    let seed1 = HDWallet::from_mnemonic_passphrase(
+    let seed1 = HdWallet::from_mnemonic_passphrase(
       "horn tenant knee talent sponsor spell gate clip pulse soap slush warm silver nephew swap uncle crack brave",
-      MnemonicLanguage::EN,
+      MnemonicLanguage::En,
       "TREZOR",
     ).expect("Fail");
     assert_eq!(
@@ -179,24 +179,24 @@ mod tests {
       ByteData::from_slice(seed1.to_seed()).to_hex()
     );
 
-    let seed2 = HDWallet::from_mnemonic(
+    let seed2 = HdWallet::from_mnemonic(
       "まぜる　むかし　じぶん　そえん　くつした　このよ　とおる　えもじ　おじさん　ねむたい　しいん　せすじ　のれん　ゆうめい　ときおり",
-      MnemonicLanguage::JP,
+      MnemonicLanguage::Jp,
     ).expect("Fail");
     assert_eq!(
       "4d2cd52f3ad39dc913d5a90e91163d7af4c9f11d727b273be269a404d2a23546243f8adb5009200d037900c76a3a8fc69c13afaa8084c4c85d3515232785fd54",
       ByteData::from_slice(seed2.to_seed()).to_hex()
     );
-    let entropy_jp = HDWallet::entropy_from_mnemonic(
+    let entropy_jp = HdWallet::entropy_from_mnemonic(
     "まぜる　むかし　じぶん　そえん　くつした　このよ　とおる　えもじ　おじさん　ねむたい　しいん　せすじ　のれん　ゆうめい　ときおり",
-    MnemonicLanguage::JP,
+    MnemonicLanguage::Jp,
     ).expect("Fail");
     assert_eq!(
       "e11cf99abf03d2a5e998e523373d87ba8bf1e2a9",
       ByteData::from_slice(&entropy_jp).to_hex()
     );
 
-    let wallet2 = HDWallet::from_slice(wallet.to_seed()).expect("Fail");
+    let wallet2 = HdWallet::from_slice(wallet.to_seed()).expect("Fail");
     assert_eq!(wallet.to_seed(), wallet2.to_seed());
     let extkey = wallet.get_privkey(&Network::Testnet).expect("Fail");
     assert_eq!("tprv8ZgxMBicQKsPf5HXdKpB8XR3b2QzaC5CTe7VCKzkBoS8xF1d3yCooGzVkKFd3UCCiBQnpL9UMJxzwTxfEQ9st97yAEN2PM2LjieSKtTqBnT", extkey.to_str());
