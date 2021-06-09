@@ -914,15 +914,15 @@ impl Default for ExtPubkey {
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum MnemonicLanguage {
   /// English
-  EN,
+  En,
   /// Spanish
-  ES,
+  Es,
   /// French
-  FR,
+  Fr,
   /// Italic
-  IT,
+  It,
   /// Japanese
-  JP,
+  Jp,
   /// Simplified Chinese (China)
   ZhCn,
   /// Traditional Chinese (Taiwan)
@@ -932,11 +932,11 @@ pub enum MnemonicLanguage {
 impl MnemonicLanguage {
   pub(in crate) fn to_str(&self) -> String {
     match self {
-      MnemonicLanguage::EN => "en".to_string(),
-      MnemonicLanguage::ES => "es".to_string(),
-      MnemonicLanguage::FR => "fr".to_string(),
-      MnemonicLanguage::IT => "it".to_string(),
-      MnemonicLanguage::JP => "jp".to_string(),
+      MnemonicLanguage::En => "en".to_string(),
+      MnemonicLanguage::Es => "es".to_string(),
+      MnemonicLanguage::Fr => "fr".to_string(),
+      MnemonicLanguage::It => "it".to_string(),
+      MnemonicLanguage::Jp => "jp".to_string(),
       MnemonicLanguage::ZhCn => "zhs".to_string(),
       MnemonicLanguage::ZhTw => "zht".to_string(),
     }
@@ -945,21 +945,21 @@ impl MnemonicLanguage {
 
 /// A container that stores a hdwallet seed.
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct HDWallet {
+pub struct HdWallet {
   seed: Vec<u8>,
 }
 
-impl HDWallet {
+impl HdWallet {
   /// Get mnemonic word list by english.
   ///
   /// # Example
   ///
   /// ```
-  /// use cfd_rust::HDWallet;
-  /// let en_words = HDWallet::mnemonic_word_list_en().expect("Fail");
+  /// use cfd_rust::HdWallet;
+  /// let en_words = HdWallet::mnemonic_word_list_en().expect("Fail");
   /// ```
   pub fn mnemonic_word_list_en() -> Result<Vec<String>, CfdError> {
-    HDWallet::mnemonic_word_list(MnemonicLanguage::EN)
+    HdWallet::mnemonic_word_list(MnemonicLanguage::En)
   }
 
   /// Get mnemonic word list.
@@ -970,8 +970,8 @@ impl HDWallet {
   /// # Example
   ///
   /// ```
-  /// use cfd_rust::{HDWallet, MnemonicLanguage};
-  /// let en_words = HDWallet::mnemonic_word_list(MnemonicLanguage::EN).expect("Fail");
+  /// use cfd_rust::{HdWallet, MnemonicLanguage};
+  /// let en_words = HdWallet::mnemonic_word_list(MnemonicLanguage::En).expect("Fail");
   /// ```
   pub fn mnemonic_word_list(lang: MnemonicLanguage) -> Result<Vec<String>, CfdError> {
     let language = alloc_c_string(&lang.to_str())?;
@@ -1040,9 +1040,9 @@ impl HDWallet {
   /// # Example
   ///
   /// ```
-  /// use cfd_rust::{HDWallet, MnemonicLanguage};
+  /// use cfd_rust::{HdWallet, MnemonicLanguage};
   /// let entropy = [1; 32];
-  /// let mnemonic = HDWallet::mnemonic_from_entropy(&entropy, MnemonicLanguage::EN).expect("Fail");
+  /// let mnemonic = HdWallet::mnemonic_from_entropy(&entropy, MnemonicLanguage::En).expect("Fail");
   /// ```
   pub fn mnemonic_from_entropy(entropy: &[u8], lang: MnemonicLanguage) -> Result<String, CfdError> {
     let entropy_hex = alloc_c_string(&hex_from_bytes(&entropy))?;
@@ -1074,10 +1074,10 @@ impl HDWallet {
   /// # Example
   ///
   /// ```
-  /// use cfd_rust::{HDWallet, MnemonicLanguage};
-  /// let entropy = HDWallet::entropy_from_mnemonic(
+  /// use cfd_rust::{HdWallet, MnemonicLanguage};
+  /// let entropy = HdWallet::entropy_from_mnemonic(
   ///   "horn tenant knee talent sponsor spell gate clip pulse soap slush warm silver nephew swap uncle crack brave",
-  ///   MnemonicLanguage::EN,
+  ///   MnemonicLanguage::En,
   /// ).expect("Fail");
   /// ```
   pub fn entropy_from_mnemonic(
@@ -1124,14 +1124,14 @@ impl HDWallet {
   /// # Example
   ///
   /// ```
-  /// use cfd_rust::{HDWallet, MnemonicLanguage};
-  /// let wallet = HDWallet::from_mnemonic(
+  /// use cfd_rust::{HdWallet, MnemonicLanguage};
+  /// let wallet = HdWallet::from_mnemonic(
   ///   "horn tenant knee talent sponsor spell gate clip pulse soap slush warm silver nephew swap uncle crack brave",
-  ///   MnemonicLanguage::EN,
+  ///   MnemonicLanguage::En,
   /// ).expect("Fail");
   /// ```
-  pub fn from_mnemonic(mnemonic: &str, lang: MnemonicLanguage) -> Result<HDWallet, CfdError> {
-    HDWallet::from_mnemonic_passphrase(mnemonic, lang, "")
+  pub fn from_mnemonic(mnemonic: &str, lang: MnemonicLanguage) -> Result<HdWallet, CfdError> {
+    HdWallet::from_mnemonic_passphrase(mnemonic, lang, "")
   }
 
   /// Create from mnemonic passphrase.
@@ -1144,10 +1144,10 @@ impl HDWallet {
   /// # Example
   ///
   /// ```
-  /// use cfd_rust::{HDWallet, MnemonicLanguage};
-  /// let wallet = HDWallet::from_mnemonic_passphrase(
+  /// use cfd_rust::{HdWallet, MnemonicLanguage};
+  /// let wallet = HdWallet::from_mnemonic_passphrase(
   ///   "horn tenant knee talent sponsor spell gate clip pulse soap slush warm silver nephew swap uncle crack brave",
-  ///   MnemonicLanguage::EN,
+  ///   MnemonicLanguage::En,
   ///   "pass",
   /// ).expect("Fail");
   /// ```
@@ -1155,7 +1155,7 @@ impl HDWallet {
     mnemonic: &str,
     lang: MnemonicLanguage,
     passphrase: &str,
-  ) -> Result<HDWallet, CfdError> {
+  ) -> Result<HdWallet, CfdError> {
     let tmp_mnemonic = mnemonic.replace("　", " ");
     let passphrase = alloc_c_string(passphrase)?;
     let language = alloc_c_string(&lang.to_str())?;
@@ -1179,7 +1179,7 @@ impl HDWallet {
       0 => {
         let list = unsafe { collect_multi_cstring_and_free(&[seed, entropy]) }?;
         let seed_obj = &list[0];
-        Ok(HDWallet {
+        Ok(HdWallet {
           seed: byte_from_hex_unsafe(seed_obj),
         })
       }
@@ -1197,14 +1197,14 @@ impl HDWallet {
   /// # Example
   ///
   /// ```
-  /// use cfd_rust::HDWallet;
+  /// use cfd_rust::HdWallet;
   /// let seed = [1; 32];
-  /// let wallet = HDWallet::from_slice(&seed).expect("Fail");
+  /// let wallet = HdWallet::from_slice(&seed).expect("Fail");
   /// ```
-  pub fn from_slice(seed: &[u8]) -> Result<HDWallet, CfdError> {
+  pub fn from_slice(seed: &[u8]) -> Result<HdWallet, CfdError> {
     // verify
     let _verify = ExtPrivkey::from_seed(seed, &Network::Mainnet)?;
-    Ok(HDWallet {
+    Ok(HdWallet {
       seed: seed.to_vec(),
     })
   }
@@ -1222,9 +1222,9 @@ impl HDWallet {
   /// # Example
   ///
   /// ```
-  /// use cfd_rust::{HDWallet, Network};
+  /// use cfd_rust::{HdWallet, Network};
   /// let seed = [1; 32];
-  /// let hdwallet = HDWallet::from_slice(&seed).expect("Fail");
+  /// let hdwallet = HdWallet::from_slice(&seed).expect("Fail");
   /// let extkey = hdwallet.get_privkey(&Network::Testnet).expect("Fail");
   /// ```
   pub fn get_privkey(&self, network_type: &Network) -> Result<ExtPrivkey, CfdError> {
@@ -1240,9 +1240,9 @@ impl HDWallet {
   /// # Example
   ///
   /// ```
-  /// use cfd_rust::{HDWallet, Network};
+  /// use cfd_rust::{HdWallet, Network};
   /// let seed = [1; 32];
-  /// let hdwallet = HDWallet::from_slice(&seed).expect("Fail");
+  /// let hdwallet = HdWallet::from_slice(&seed).expect("Fail");
   /// let path = "2'/1";
   /// let derive_key = hdwallet.get_privkey_from_path(&Network::Testnet, path).expect("Fail");
   /// ```
@@ -1265,9 +1265,9 @@ impl HDWallet {
   /// # Example
   ///
   /// ```
-  /// use cfd_rust::{HDWallet, Network};
+  /// use cfd_rust::{HdWallet, Network};
   /// let seed = [1; 32];
-  /// let hdwallet = HDWallet::from_slice(&seed).expect("Fail");
+  /// let hdwallet = HdWallet::from_slice(&seed).expect("Fail");
   /// let derive_key = hdwallet.get_privkey_from_number(&Network::Testnet, 2, true).expect("Fail");
   /// ```
   pub fn get_privkey_from_number(
@@ -1289,9 +1289,9 @@ impl HDWallet {
   /// # Example
   ///
   /// ```
-  /// use cfd_rust::{HDWallet, Network};
+  /// use cfd_rust::{HdWallet, Network};
   /// let seed = [1; 32];
-  /// let hdwallet = HDWallet::from_slice(&seed).expect("Fail");
+  /// let hdwallet = HdWallet::from_slice(&seed).expect("Fail");
   /// let child_number_list = vec![0x80000002, 1];
   /// let derive_key = hdwallet.get_privkey_from_number_list(&Network::Testnet, &child_number_list).expect("Fail");
   /// ```
@@ -1312,9 +1312,9 @@ impl HDWallet {
   /// # Example
   ///
   /// ```
-  /// use cfd_rust::{HDWallet, Network};
+  /// use cfd_rust::{HdWallet, Network};
   /// let seed = [1; 32];
-  /// let hdwallet = HDWallet::from_slice(&seed).expect("Fail");
+  /// let hdwallet = HdWallet::from_slice(&seed).expect("Fail");
   /// let extkey = hdwallet.get_pubkey(&Network::Testnet).expect("Fail");
   /// ```
   pub fn get_pubkey(&self, network_type: &Network) -> Result<ExtPubkey, CfdError> {
@@ -1331,9 +1331,9 @@ impl HDWallet {
   /// # Example
   ///
   /// ```
-  /// use cfd_rust::{HDWallet, Network};
+  /// use cfd_rust::{HdWallet, Network};
   /// let seed = [1; 32];
-  /// let hdwallet = HDWallet::from_slice(&seed).expect("Fail");
+  /// let hdwallet = HdWallet::from_slice(&seed).expect("Fail");
   /// let path = "2'/1";
   /// let derive_key = hdwallet.get_pubkey_from_path(&Network::Testnet, path).expect("Fail");
   /// ```
@@ -1356,9 +1356,9 @@ impl HDWallet {
   /// # Example
   ///
   /// ```
-  /// use cfd_rust::{HDWallet, Network};
+  /// use cfd_rust::{HdWallet, Network};
   /// let seed = [1; 32];
-  /// let hdwallet = HDWallet::from_slice(&seed).expect("Fail");
+  /// let hdwallet = HdWallet::from_slice(&seed).expect("Fail");
   /// let derive_key = hdwallet.get_pubkey_from_number(&Network::Testnet, 2, true).expect("Fail");
   /// ```
   pub fn get_pubkey_from_number(
@@ -1380,9 +1380,9 @@ impl HDWallet {
   /// # Example
   ///
   /// ```
-  /// use cfd_rust::{HDWallet, Network};
+  /// use cfd_rust::{HdWallet, Network};
   /// let seed = [1; 32];
-  /// let hdwallet = HDWallet::from_slice(&seed).expect("Fail");
+  /// let hdwallet = HdWallet::from_slice(&seed).expect("Fail");
   /// let child_number_list = vec![0x80000002, 1];
   /// let derive_key = hdwallet.get_pubkey_from_number_list(&Network::Testnet, &child_number_list).expect("Fail");
   /// ```
@@ -1396,7 +1396,7 @@ impl HDWallet {
   }
 }
 
-impl fmt::Display for HDWallet {
+impl fmt::Display for HdWallet {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     let s = hex::encode(&self.seed);
     write!(f, "seed:{}", s)

@@ -107,7 +107,7 @@ impl Block {
   }
 
   /// Exist txid in block
-  /// 
+  ///
   /// # Arguments
   /// * `txid` - A transaction id.
   pub fn exist_txid(&self, txid: &Txid) -> bool {
