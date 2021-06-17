@@ -2,7 +2,9 @@ extern crate cfd_rust;
 
 #[cfg(test)]
 mod tests {
-  use cfd_rust::{ByteData, ExtPrivkey, ExtPubkey, HdWallet, MnemonicLanguage, Network, Pubkey};
+  use cfd_rust::{
+    Bip32FormatType, ByteData, ExtPrivkey, ExtPubkey, HdWallet, MnemonicLanguage, Network, Pubkey,
+  };
   use std::str::FromStr;
 
   #[test]
@@ -226,5 +228,103 @@ mod tests {
       .get_pubkey_from_number_list(&Network::Testnet, &[0x80000002, 1])
       .expect("Fail");
     assert_eq!("tpubDBDZWcMw1ENJfGqRthuDLymZBtovazQtLEz1KJZvcDcwKkjgRwcKi5s44sCtksb3NCbBishZnTTCNnpB32FQCKmAevUkzh7Zd7akdF3C7s7", derive_pubkey3.to_str());
+  }
+
+  #[test]
+  fn generate_bip49_test() {
+    let hd_wallet = HdWallet::from_slice(
+      ByteData::from_str(
+        "2e8905819b8723fe2c1d161860e5ee1830318dbf49a83bd451cfb8440c28bd6fa457fe1296106559a3c80937a1c1069be3a3a5bd381ee6260e8d9739fce1f607").expect("Fail").to_slice()).expect("Fail");
+
+    let privkey = hd_wallet
+      .get_privkey_by_format(&Network::Mainnet, &Bip32FormatType::Bip49)
+      .expect("Fail");
+    assert_eq!(
+      "yprvABrGsX5C9jansyMEqxKsVvZbJw8TZ91fJgy3sHmyjFpDhdbRa9Az7Xy2ATTxTWWnGcmZp3DJpo6cE9cqpVMeiT9XeppQpSgWZQTJPUXFJ1o",
+      privkey.to_str());
+
+    let privkey2 = hd_wallet
+      .get_privkey_by_format(&Network::Testnet, &Bip32FormatType::Bip49)
+      .expect("Fail");
+    assert_eq!(
+      "uprv8tXDerPXZ1QsUnamWXBNfaBad4Yfnf3feEtAjiCSDEJhVELWZWWjdHLU5ddcTsu6e4JLp8q4z9gQh1AawhhbXWR8BU2iUoQZUWCiqCMZMbF",
+      privkey2.to_str());
+
+    let pubkey = privkey.get_ext_pubkey().expect("Fail");
+    assert_eq!(
+      "ypub6QqdH2c5z7966TRhwyrss4WKrxxwxbjWfutefgBbHbMCaRva7gVEfLHW1iF2D5KkAe7m58miGseC8RL5BKCpiVatvZEomWCfnZBSrmjv6Bj",
+      pubkey.to_str());
+
+    let pubkey2 = privkey2.get_ext_pubkey().expect("Fail");
+    assert_eq!(
+      "upub57Wa4MvRPNyAhGfEcYiP2i8KB6PAC7mX1TomY6c3mZqgN2ff73pzB5ewvtQgDSi4Y5eY5EPUSEDzbGspJXYmXYrVTCT7RrvihevsJUobT2n",
+      pubkey2.to_str());
+  }
+
+  #[test]
+  fn generate_bip84_test() {
+    let hd_wallet = HdWallet::from_slice(
+      ByteData::from_str(
+        "2e8905819b8723fe2c1d161860e5ee1830318dbf49a83bd451cfb8440c28bd6fa457fe1296106559a3c80937a1c1069be3a3a5bd381ee6260e8d9739fce1f607").expect("Fail").to_slice()).expect("Fail");
+
+    let privkey = hd_wallet
+      .get_privkey_by_format(&Network::Mainnet, &Bip32FormatType::Bip84)
+      .expect("Fail");
+    assert_eq!(
+          "zprvAWgYBBk7JR8GjGYMgK7Vi1f6UuGuVm1ADoVGegfs7GC6kjQepoLYjbdABfRYTRAhgFtNZWosHTTA7SEQYBmfWgq8XAWqQMVzq8Wwn5FVTAs",
+          privkey.to_str());
+
+    let privkey2 = hd_wallet
+      .get_privkey_by_format(&Network::Testnet, &Bip32FormatType::Bip84)
+      .expect("Fail");
+    assert_eq!(
+          "vprv9DMUxX4ShgxML5mtLsxzsfH5o2h7jH3AZMQPX76KbEgaYL9jpAgJFLzc6qbCTnZ23hR9ZcRdSp2xaHn9fQ7cKk6j3oj94iE3kEGNDnPQsRs",
+          privkey2.to_str());
+
+    let pubkey = privkey.get_ext_pubkey().expect("Fail");
+    assert_eq!(
+          "zpub6jftahH18ngZwkcpnLeW59bq2w7PuDj1b2QsT55Ufbj5dXjoNLeoHPwe2vCcCyyfaHEZpcNGjXzk1hwdu1cqWjGVntwEMR2A4HF6FMAUyHZ",
+          pubkey.to_str());
+
+    let pubkey2 = privkey2.get_ext_pubkey().expect("Fail");
+    assert_eq!(
+          "vpub5SLqN2bLY4WeYZrMSuW1EoDpM4Xc8jm1vaKzKVVw9aDZR8UtMhzYo9K5x6NGDMMywimLphz2ttaYUZVP2DxnKnY6KY9Y1mkCyNzWh5ZcLgK",
+          pubkey2.to_str());
+  }
+
+  #[test]
+  fn ext_pubkey_direct_test() {
+    let key = ExtPubkey::create_by_format(
+      Network::Testnet,
+      ByteData::from_str("0f8bf061").expect("Fail"),
+      Pubkey::from_str("02ababac7e844d73f3c9a58f2a21317239030eb761b8b8d1edec1f054015bddb5b")
+        .expect("Fail"),
+      ByteData::from_str("07258d0d6e5b343330c72c721fde9d6e680faff5e3ef2e53b798a9e4068303f6")
+        .expect("Fail"),
+      5,
+      3,
+      Bip32FormatType::Bip49,
+    )
+    .expect("Fail");
+
+    assert_eq!(
+      "upub5H2skrEnbC2UHv2S5Jmr7G6DSgk6qtrMbKRooE9Ce51rALhjztxjRFzhSXtS4aCbGFNAiSVywau6A1GuR1L6Wg6BqXsU1J7SMwZb4wFzBkK",
+      key.to_str());
+
+    let key2 = ExtPubkey::create_by_format(
+      Network::Testnet,
+      ByteData::from_str("0f8bf061").expect("Fail"),
+      Pubkey::from_str("02ababac7e844d73f3c9a58f2a21317239030eb761b8b8d1edec1f054015bddb5b")
+        .expect("Fail"),
+      ByteData::from_str("07258d0d6e5b343330c72c721fde9d6e680faff5e3ef2e53b798a9e4068303f6")
+        .expect("Fail"),
+      5,
+      3,
+      Bip32FormatType::Bip84,
+    )
+    .expect("Fail");
+    assert_eq!(
+      "vpub5bs94WuhjsZx9DDYufZUKMBicetYnWqrWRx2ad3625PjDSWyFZ8J3KeqTjr24UrWftUyTv6YQFFe3HtU8hk7JumnhsZtbCvvdfdETYZQ1La",
+      key2.to_str());
   }
 }

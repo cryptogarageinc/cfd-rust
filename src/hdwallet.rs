@@ -13,10 +13,11 @@ use std::result::Result::{Err, Ok};
 use std::str::FromStr;
 
 use self::cfd_sys::{
-  CfdConvertEntropyToMnemonic, CfdConvertMnemonicToSeed, CfdCreateExtPubkey, CfdCreateExtkey,
-  CfdCreateExtkeyFromParent, CfdCreateExtkeyFromParentPath, CfdCreateExtkeyFromSeed,
-  CfdFreeMnemonicWordList, CfdGetExtkeyInformation, CfdGetMnemonicWord, CfdGetPrivkeyFromExtkey,
-  CfdGetPubkeyFromExtkey, CfdInitializeMnemonicWordList,
+  CfdConvertEntropyToMnemonic, CfdConvertMnemonicToSeed, CfdCreateExtPubkey,
+  CfdCreateExtkeyByFormat, CfdCreateExtkeyByFormatFromSeed, CfdCreateExtkeyFromParent,
+  CfdCreateExtkeyFromParentPath, CfdFreeMnemonicWordList, CfdGetExtkeyInformation,
+  CfdGetMnemonicWord, CfdGetPrivkeyFromExtkey, CfdGetPubkeyFromExtkey,
+  CfdInitializeMnemonicWordList,
 };
 
 /// xpriv mainnet version
@@ -49,6 +50,34 @@ impl fmt::Display for ExtKeyType {
     match *self {
       ExtKeyType::Privkey => write!(f, "ExtPrivkey"),
       ExtKeyType::Pubkey => write!(f, "ExtPubkey"),
+    }
+  }
+}
+
+/// An enumeration of extkey type.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum Bip32FormatType {
+  Bip32,
+  Bip49,
+  Bip84,
+}
+
+impl Bip32FormatType {
+  pub fn to_c_value(&self) -> c_int {
+    match self {
+      Bip32FormatType::Bip32 => 0,
+      Bip32FormatType::Bip49 => 1,
+      Bip32FormatType::Bip84 => 2,
+    }
+  }
+}
+
+impl fmt::Display for Bip32FormatType {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match *self {
+      Bip32FormatType::Bip32 => write!(f, "Bip32"),
+      Bip32FormatType::Bip49 => write!(f, "Bip49"),
+      Bip32FormatType::Bip84 => write!(f, "Bip84"),
     }
   }
 }
@@ -144,15 +173,13 @@ impl ExtKey {
         let version_byte = byte_from_hex_unsafe(version_str);
         let fingerprint_byte = byte_from_hex_unsafe(fingerprint_obj);
         let chain_code_byte = byte_from_hex_unsafe(chain_code_obj);
-        let net_type = match &version_str as &str {
-          XPRIV_MAINNET_VERSION => Ok(Network::Mainnet),
-          XPRIV_TESTNET_VERSION => Ok(Network::Testnet),
-          XPUB_MAINNET_VERSION => Ok(Network::Mainnet),
-          XPUB_TESTNET_VERSION => Ok(Network::Testnet),
-          _ => Err(CfdError::IllegalArgument(
-            "unsupported version.".to_string(),
-          )),
-        }?;
+        let net_type = {
+          let ret = generate_pubkey(extkey, Network::Mainnet);
+          match ret {
+            Ok(_) => Network::Mainnet,
+            _ => Network::Testnet,
+          }
+        };
         Ok(ExtKey {
           extkey: extkey.to_string(),
           version: ByteData::from_slice(&version_byte),
@@ -323,15 +350,30 @@ impl ExtPrivkey {
   /// let extkey = ExtPrivkey::from_seed(&seed, &Network::Testnet).expect("Fail");
   /// ```
   pub fn from_seed(seed: &[u8], network_type: &Network) -> Result<ExtPrivkey, CfdError> {
+    Self::from_seed_by_format(seed, network_type, &Bip32FormatType::Bip32)
+  }
+
+  /// Generate from a seed.
+  ///
+  /// # Arguments
+  /// * `seed` - A seed byte data.
+  /// * `network_type` - A target network.
+  /// * `format_type` - A bip32 format type.
+  pub fn from_seed_by_format(
+    seed: &[u8],
+    network_type: &Network,
+    format_type: &Bip32FormatType,
+  ) -> Result<ExtPrivkey, CfdError> {
     let seed_str = alloc_c_string(&hex_from_bytes(seed))?;
     let mut handle = ErrorHandle::new()?;
     let mut extkey_hex: *mut c_char = ptr::null_mut();
     let error_code = unsafe {
-      CfdCreateExtkeyFromSeed(
+      CfdCreateExtkeyByFormatFromSeed(
         handle.as_handle(),
         seed_str.as_ptr(),
         network_type.to_c_value(),
         ExtKeyType::Privkey.to_c_value(),
+        format_type.to_c_value(),
         &mut extkey_hex,
       )
     };
@@ -605,6 +647,17 @@ impl Default for ExtPrivkey {
   }
 }
 
+/// A container that stores a ext privkey.
+#[derive(Debug, PartialEq, Eq, Clone)]
+struct ExtPubkeyData {
+  pub network_type: Network,
+  pub pubkey: Pubkey,
+  pub chain_code: ByteData,
+  pub depth: u32,
+  pub child_number: u32,
+  pub format_type: Bip32FormatType,
+}
+
 /// A container that stores a ext pubkey.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ExtPubkey {
@@ -662,15 +715,45 @@ impl ExtPubkey {
     depth: u32,
     child_number: u32,
   ) -> Result<ExtPubkey, CfdError> {
-    ExtPubkey::create_ext_pubkey(
-      ptr::null(),
-      &parent_pubkey,
+    let data = ExtPubkeyData {
       network_type,
       pubkey,
       chain_code,
       depth,
       child_number,
-    )
+      format_type: Bip32FormatType::Bip32,
+    };
+    ExtPubkey::create_ext_pubkey(ptr::null(), &parent_pubkey, &data)
+  }
+
+  /// Create ext pubkey from parent pubkey.
+  ///
+  /// # Arguments
+  /// * `network_type` - A target network.
+  /// * `parent_pubkey` - A parent pubkey.
+  /// * `pubkey` - A current pubkey.
+  /// * `chain_code` - A chain code.
+  /// * `depth` - A depth.
+  /// * `child_number` - A current child number.
+  /// * `format_type` - A bip32 format type.
+  pub fn from_parent_info_by_format(
+    network_type: Network,
+    parent_pubkey: Pubkey,
+    pubkey: Pubkey,
+    chain_code: ByteData,
+    depth: u32,
+    child_number: u32,
+    format_type: Bip32FormatType,
+  ) -> Result<ExtPubkey, CfdError> {
+    let data = ExtPubkeyData {
+      network_type,
+      pubkey,
+      chain_code,
+      depth,
+      child_number,
+      format_type,
+    };
+    ExtPubkey::create_ext_pubkey(ptr::null(), &parent_pubkey, &data)
   }
 
   /// Create ext pubkey from parent pubkey fingerprint.
@@ -705,25 +788,51 @@ impl ExtPubkey {
     depth: u32,
     child_number: u32,
   ) -> Result<ExtPubkey, CfdError> {
-    ExtPubkey::create_ext_pubkey(
-      &fingerprint,
-      ptr::null(),
+    let data = ExtPubkeyData {
       network_type,
       pubkey,
       chain_code,
       depth,
       child_number,
-    )
+      format_type: Bip32FormatType::Bip32,
+    };
+    ExtPubkey::create_ext_pubkey(&fingerprint, ptr::null(), &data)
+  }
+
+  /// Create ext pubkey from parent pubkey fingerprint.
+  ///
+  /// # Arguments
+  /// * `network_type` - A target network.
+  /// * `fingerprint` - A parent pubkey fingerprint.
+  /// * `pubkey` - A current pubkey.
+  /// * `chain_code` - A chain code.
+  /// * `depth` - A depth.
+  /// * `child_number` - A current child number.
+  /// * `format_type` - A bip32 format type.
+  pub fn create_by_format(
+    network_type: Network,
+    fingerprint: ByteData,
+    pubkey: Pubkey,
+    chain_code: ByteData,
+    depth: u32,
+    child_number: u32,
+    format_type: Bip32FormatType,
+  ) -> Result<ExtPubkey, CfdError> {
+    let data = ExtPubkeyData {
+      network_type,
+      pubkey,
+      chain_code,
+      depth,
+      child_number,
+      format_type,
+    };
+    ExtPubkey::create_ext_pubkey(&fingerprint, ptr::null(), &data)
   }
 
   fn create_ext_pubkey(
     fingerprint: *const ByteData,
     parent_pubkey: *const Pubkey,
-    network_type: Network,
-    pubkey: Pubkey,
-    chain_code: ByteData,
-    depth: u32,
-    child_number: u32,
+    data: &ExtPubkeyData,
   ) -> Result<ExtPubkey, CfdError> {
     let fingerprint_hex = unsafe {
       match fingerprint.as_ref() {
@@ -737,21 +846,22 @@ impl ExtPubkey {
         _ => alloc_c_string(""),
       }
     }?;
-    let pubkey_hex = alloc_c_string(&pubkey.to_hex())?;
-    let chain_code_hex = alloc_c_string(&chain_code.to_hex())?;
+    let pubkey_hex = alloc_c_string(&data.pubkey.to_hex())?;
+    let chain_code_hex = alloc_c_string(&data.chain_code.to_hex())?;
     let mut handle = ErrorHandle::new()?;
     let mut extkey: *mut c_char = ptr::null_mut();
     let error_code = unsafe {
-      CfdCreateExtkey(
+      CfdCreateExtkeyByFormat(
         handle.as_handle(),
-        network_type.to_c_value(),
+        data.network_type.to_c_value(),
         ExtKeyType::Pubkey.to_c_value(),
         parent_pubkey_hex.as_ptr(),
         fingerprint_hex.as_ptr(),
         pubkey_hex.as_ptr(),
         chain_code_hex.as_ptr(),
-        depth as u8,
-        child_number,
+        data.depth as u8,
+        data.child_number,
+        data.format_type.to_c_value(),
         &mut extkey,
       )
     };
@@ -766,20 +876,13 @@ impl ExtPubkey {
     result
   }
 
-  fn validate(extkey: &ExtKey) -> Result<(), CfdError> {
-    match &extkey.version.to_hex() as &str {
-      XPUB_MAINNET_VERSION => Ok(()),
-      XPUB_TESTNET_VERSION => Ok(()),
-      _ => Err(CfdError::IllegalArgument(
-        "Invalid xpub version.".to_string(),
-      )),
-    }
-  }
-
   fn from_key(extkey: ExtKey) -> Result<ExtPubkey, CfdError> {
-    let _ret = ExtPubkey::validate(&extkey)?;
     let pubkey = generate_pubkey(extkey.to_str(), *extkey.get_network_type())?;
-    Ok(ExtPubkey { extkey, pubkey })
+    let privkey_ret = generate_privkey(extkey.to_str(), *extkey.get_network_type());
+    match privkey_ret {
+      Ok(_) => Err(CfdError::IllegalArgument("Invalid extpubkey.".to_string())),
+      _ => Ok(ExtPubkey { extkey, pubkey }),
+    }
   }
 
   /// Derive pubkey.
@@ -1229,6 +1332,19 @@ impl HdWallet {
   /// ```
   pub fn get_privkey(&self, network_type: &Network) -> Result<ExtPrivkey, CfdError> {
     ExtPrivkey::from_seed(&self.seed, network_type)
+  }
+
+  /// Generate ext privkey from a seed.
+  ///
+  /// # Arguments
+  /// * `network_type` - A target network.
+  /// * `format_type` - A bip32 format type.
+  pub fn get_privkey_by_format(
+    &self,
+    network_type: &Network,
+    format_type: &Bip32FormatType,
+  ) -> Result<ExtPrivkey, CfdError> {
+    ExtPrivkey::from_seed_by_format(&self.seed, network_type, format_type)
   }
 
   /// Generate ext privkey from a seed, and derive from number path string.

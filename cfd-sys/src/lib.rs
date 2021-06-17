@@ -247,6 +247,14 @@ fns! {
     key_type: c_int,
     extkey: *mut *mut c_char,
   ) -> c_int;
+  pub fn CfdCreateExtkeyByFormatFromSeed(
+    handle: *const c_void,
+    seed_hex: *const i8,
+    network_type: c_int,
+    key_type: c_int,
+    format_type: c_int,
+    extkey: *mut *mut c_char,
+  ) -> c_int;
   pub fn CfdCreateExtkey(
     handle: *const c_void,
     network_type: c_int,
@@ -257,6 +265,19 @@ fns! {
     chain_code: *const i8,
     depth: c_uchar,
     child_number: u32,
+    extkey: *mut *mut c_char,
+  ) -> c_int;
+  pub fn CfdCreateExtkeyByFormat(
+    handle: *const c_void,
+    network_type: c_int,
+    key_type: c_int,
+    parent_key: *const i8,
+    fingerprint: *const i8,
+    key: *const i8,
+    chain_code: *const i8,
+    depth: c_uchar,
+    child_number: u32,
+    format_type: c_int,
     extkey: *mut *mut c_char,
   ) -> c_int;
   pub fn CfdCreateExtkeyFromParent(
