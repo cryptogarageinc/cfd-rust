@@ -60,6 +60,7 @@ pub use descriptor::DescriptorKeyType;
 pub use descriptor::DescriptorScriptData;
 pub use descriptor::DescriptorScriptType;
 pub use descriptor::KeyData;
+pub use hdwallet::Bip32FormatType;
 pub use hdwallet::ExtKey;
 pub use hdwallet::ExtPrivkey;
 pub use hdwallet::ExtPubkey;
